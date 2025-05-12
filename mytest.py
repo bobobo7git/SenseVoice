@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from exceptions import *
 from model import SenseVoiceSmall
 from funasr.utils.postprocess_utils import rich_transcription_postprocess, format_str_v2, sentence_postprocess_sentencepiece, sentence_postprocess
-
+from pprint import pprint
 import tempfile
 import os
 
@@ -12,6 +12,21 @@ app = FastAPI()
 model_dir = "iic/SenseVoiceSmall"
 m, kwargs = SenseVoiceSmall.from_pretrained(model=model_dir, device="cuda:0")
 m.eval()
+
+label2scheme = {
+    'HAPPY': 'happiness',
+    'SAD': 'sadness',
+    'NEUTRAL': 'neutral',
+    'ANGRY': 'angry',
+    'EMO_UNKNOWN': 'other'
+}
+prob2scheme = {
+    'happy': 'happiness',
+    'sad': 'sadness',
+    'neutral': 'neutral',
+    'angry': 'angry',
+    'unk': 'other'
+}
 
 @app.get("/")
 def read_root():
@@ -28,7 +43,8 @@ async def analyze(file: UploadFile=File(...)):
         tmp.write(await file.read())
         tmp.flush()
         tmp_path = tmp.name
-
+        if not content_type.startswith('audio'):
+            raise InvalidAudioFormatError(content_type)
     try:
         res = m.inference(
             data_in=tmp_path,
@@ -42,7 +58,13 @@ async def analyze(file: UploadFile=File(...)):
     finally:
         os.remove(tmp_path)
 
-    print(format_str_v2(res[0][0]["text"]))
+    # emotion score 
+    emotion_scores = {
+        prob2scheme[label]: v
+        for label, v in res[0][0]['emotion_probs'].items()
+    }
+
+    # final emotion tag
     res = res[0][0]["text"].split("<|woitn|>")
     li = res[0].replace("<", "").replace(">", "").split("|")
     li = [e for e in li if e]
@@ -54,10 +76,12 @@ async def analyze(file: UploadFile=File(...)):
         "content_type": content_type,
         "message": "success",
         "result": {
-            "emotion": final_emotion,
+            "emotion": label2scheme[final_emotion],
+            "emotion_scores": emotion_scores,
             "language": final_language,
             "event": final_event
-        }
+        },
+        
     }, status_code=200)
 
 @app.exception_handler(InvalidAudioFormatError)

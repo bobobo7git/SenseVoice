@@ -35,3 +35,7 @@ venv/
 __pycache__/
 *.pyc
 *.log
+
+# 학습 데이터
+dataset/
+train.jsonl

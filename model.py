@@ -855,6 +855,10 @@ class SenseVoiceSmall(nn.Module):
 
         # c. Passed the encoder result and the beam search
         ctc_logits = self.ctc.log_softmax(encoder_out)
+
+        # custom
+        batch_emotion_probs = self.get_softmax_prob(ctc_logits)
+
         if kwargs.get("ban_emo_unk", False):
             ctc_logits[:, :, self.emo_dict["unk"]] = -float("inf")
 
@@ -915,9 +919,11 @@ class SenseVoiceSmall(nn.Module):
                     _start = _end
 
                 result_i = {"key": key[i], "text": text, "timestamp": timestamp}
+                result_i['emotion_probs'] = batch_emotion_probs[i]
                 results.append(result_i)
             else:
                 result_i = {"key": key[i], "text": text}
+                result_i['emotion_probs'] = batch_emotion_probs[i]
                 results.append(result_i)
         return results, meta_data
 
@@ -928,3 +934,18 @@ class SenseVoiceSmall(nn.Module):
             kwargs["max_seq_len"] = 512
         models = export_rebuild_model(model=self, **kwargs)
         return models
+    
+    def get_softmax_prob(self, ctc_logits: torch.Tensor):
+        probs = ctc_logits.exp()
+        emotion_frame_idx = 1
+        # utt_probs = probs.mean(dim=1)
+
+        batch_emotion_probs = []
+        for b_idx in range(probs.size(0)):
+            p = probs[b_idx, emotion_frame_idx]
+            batch_emotion_probs.append({
+                emo: p[idx].item()
+                for emo, idx in self.emo_dict.items()
+            })
+        return batch_emotion_probs
+
