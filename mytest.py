@@ -3,8 +3,7 @@ from fastapi.responses import JSONResponse
 from exceptions import *
 from client_request.analyzeRequest import AnalyzeRequest
 from model import SenseVoiceSmall
-from funasr.utils.postprocess_utils import rich_transcription_postprocess, format_str_v2, sentence_postprocess_sentencepiece, sentence_postprocess
-from pprint import pprint
+from server_config import label2scheme, prob2scheme
 import tempfile
 import os
 
@@ -14,21 +13,6 @@ model_dir = "iic/SenseVoiceSmall"
 m, kwargs = SenseVoiceSmall.from_pretrained(model=model_dir, device="cuda:0")
 m.eval()
 
-label2scheme = {
-    'HAPPY': 'happiness',
-    'SAD': 'sadness',
-    'NEUTRAL': 'neutral',
-    'ANGRY': 'angry',
-    'EMO_UNKNOWN': 'other'
-}
-prob2scheme = {
-    'happy': 'happiness',
-    'sad': 'sadness',
-    'neutral': 'neutral',
-    'angry': 'angry',
-    'unk': 'other'
-}
-
 @app.get("/")
 def read_root():
     return {"message": "Hello audio-AI server!"}
@@ -37,7 +21,10 @@ def read_root():
 async def analyze(req: AnalyzeRequest):
     url = req.audio_url
     filename = url.split("/")[-1]
-    
+    ext = filename.split(".")[-1]
+
+    if ext not in ['mp3', 'wav']:
+        raise InvalidAudioFormatError(f'.{ext}')
     try:
         res = m.inference(
             data_in=url,
@@ -48,13 +35,11 @@ async def analyze(req: AnalyzeRequest):
         )
     except HTTPException as e:
         raise e
-    except ValueError:
-        raise InvalidAudioFormatError(filename.split('.')[-1])
     except Exception as e:
         raise InternalSenseVociceError("inference failed")
 
     emotion_scores = {
-        prob2scheme[label]: v
+        prob2scheme[label]: round(v*100)
         for label, v in res[0][0]['emotion_probs'].items()
     }
 
@@ -106,7 +91,7 @@ async def legacy_analyze(file: UploadFile=File(...)):
 
     # emotion score 
     emotion_scores = {
-        prob2scheme[label]: v
+        prob2scheme[label]: round(v, 0)
         for label, v in res[0][0]['emotion_probs'].items()
     }
 
@@ -138,7 +123,7 @@ async def invalid_audio_format_handler(request: Request, exc: InvalidAudioFormat
         }, status_code=400)
 
 @app.exception_handler(InternalSenseVociceError)
-async def invalid_audio_format_handler(request: Request, exc: InternalSenseVociceError):
+async def sensevoice_internal_handler(request: Request, exc: InternalSenseVociceError):
     return JSONResponse(content={
             "message": "audio model error",
             "detail": exc.detail
@@ -154,6 +139,8 @@ async def custom_http_exception_handler(request: Request, exc: HTTPException):
             "status": exc.status_code,
         },
     )
+
+
 
 if __name__ == "__main__":
     import uvicorn
