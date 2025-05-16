@@ -2,22 +2,34 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.responses import JSONResponse
 from exceptions import *
 from client_request.analyzeRequest import AnalyzeRequest
+from client_request.textRequest import TextAnalyzeRequest
 from model import SenseVoiceSmall
-from server_config import label2scheme, prob2scheme
+from server_config import label2scheme, prob2scheme, text_label2scheme
 import tempfile
 import os
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+import torch
 
 app = FastAPI()
 
 model_dir = "iic/SenseVoiceSmall"
+bert_dir = './RoBERTa'
+
+
 m, kwargs = SenseVoiceSmall.from_pretrained(model=model_dir, device="cuda:0")
 m.eval()
+
+tokenizer = AutoTokenizer.from_pretrained(bert_dir)
+bert = AutoModelForSequenceClassification.from_pretrained(bert_dir)
+bert_id2label = bert.config.id2label
+
+
 
 @app.get("/")
 def read_root():
     return {"message": "Hello audio-AI server!"}
 
-@app.post("/analyze")
+@app.post("/audio")
 async def analyze(req: AnalyzeRequest):
     url = req.audio_url
     filename = url.split("/")[-1]
@@ -62,6 +74,44 @@ async def analyze(req: AnalyzeRequest):
         
     }, status_code=200)
     
+@app.post("/text")
+async def text_analyze(req: TextAnalyzeRequest):
+    def predict_emotion(text):
+        inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
+        with torch.no_grad():
+            outputs = bert(**inputs)
+            logits = outputs.logits
+            pred_id = torch.argmax(logits, dim=1).item()
+            pred_label = bert_id2label[pred_id]
+            probs = torch.softmax(logits, dim=1).squeeze().tolist()
+        return pred_label, probs
+    
+    def score_recalculate(scores:list ):
+        recalculated_scores = {emo:0 for emo in label2scheme.values()}
+
+        for i, v in enumerate(scores):
+            emo = bert_id2label[i]
+            recalculated_scores[text_label2scheme[emo]] += v
+        for emo, v in recalculated_scores.items():
+            recalculated_scores[emo] = round(v*100)
+        return recalculated_scores
+
+    text = req.text
+    predicted = predict_emotion(text)
+    emotion = text_label2scheme[predicted[0]]
+    emotion_scores = score_recalculate(predicted[1])
+
+    return JSONResponse(content={
+        "message": "success",
+        "text": text,
+        "result": {
+            "emotion": emotion,
+            "emotion_scores": emotion_scores,
+            "language": "ko",
+            "event": "Speech"
+        }
+    }, status_code=200)
+
 
 @app.post("/legacy-analyze")
 async def legacy_analyze(file: UploadFile=File(...)):
@@ -151,3 +201,4 @@ if __name__ == "__main__":
     HOST = os.getenv('HOST')
 
     uvicorn.run(app, host=HOST, port=PORT)
+

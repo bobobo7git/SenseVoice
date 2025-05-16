@@ -12,3 +12,12 @@ prob2scheme = {
     'angry': 'angry',
     'unk': 'other'
 }
+text_label2scheme={
+    'happiness': 'happiness',
+    'sadness': 'sadness',
+    'neutral': 'neutral',
+    'angry': 'angry',
+    'disgust': 'other',
+    'fear': 'other',
+    'surprise': 'other'
+}
