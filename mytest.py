@@ -9,7 +9,10 @@ import tempfile
 import os
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
+from dotenv import load_dotenv
 
+load_dotenv()
+HF_TOKEN = os.getenv('HF_TOKEN')
 app = FastAPI()
 
 model_dir = "iic/SenseVoiceSmall"
@@ -19,10 +22,11 @@ bert_dir = 'ubo7/RoBERTa-emotion-classfication'
 m, kwargs = SenseVoiceSmall.from_pretrained(model=model_dir, device="cuda:0")
 m.eval()
 
-tokenizer = AutoTokenizer.from_pretrained(bert_dir)
-bert = AutoModelForSequenceClassification.from_pretrained(bert_dir)
+tokenizer = AutoTokenizer.from_pretrained(bert_dir, token=HF_TOKEN)
+bert = AutoModelForSequenceClassification.from_pretrained(bert_dir, token=HF_TOKEN)
 bert_id2label = bert.config.id2label
 
+HF_TOKEN = os.getenv('HF_TOKEN')
 
 
 @app.get("/")
@@ -194,8 +198,6 @@ async def custom_http_exception_handler(request: Request, exc: HTTPException):
 
 if __name__ == "__main__":
     import uvicorn
-    from dotenv import load_dotenv
-    load_dotenv()
 
     PORT = int(os.getenv('PORT'))
     HOST = os.getenv('HOST')
