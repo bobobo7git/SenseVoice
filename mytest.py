@@ -13,7 +13,7 @@ import torch
 app = FastAPI()
 
 model_dir = "iic/SenseVoiceSmall"
-bert_dir = './RoBERTa'
+bert_dir = 'ubo7/RoBERTa-emotion-classfication'
 
 
 m, kwargs = SenseVoiceSmall.from_pretrained(model=model_dir, device="cuda:0")
