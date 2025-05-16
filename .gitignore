@@ -42,3 +42,6 @@ train.jsonl
 
 # 모델
 RoBERTa/
+
+# 도커
+Dockerfile
