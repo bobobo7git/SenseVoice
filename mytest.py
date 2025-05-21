@@ -52,7 +52,7 @@ async def analyze(req: AnalyzeRequest):
     except HTTPException as e:
         raise e
     except Exception as e:
-        raise InternalSenseVociceError("inference failed")
+        raise InternalSenseVociceError(e)
 
     emotion_scores = {
         prob2scheme[label]: round(v*100)
