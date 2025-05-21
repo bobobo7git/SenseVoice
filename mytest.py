@@ -35,29 +35,6 @@ BUCKET_NAME = "damdam-counseling-bucket"
 def read_root():
     return {"message": "Hello audio-AI server!"}
 
-def extract_s3_key(s3_url: str) -> str:
-    from urllib.parse import urlparse
-    parsed = urlparse(s3_url)
-    return parsed.path.lstrip('/')
-
-def url_to_presigned(url: str, expires_in=3600):
-    import boto3
-    from urllib.parse import urlparse
-    parsed = urlparse(url)
-    key = parsed.path.lstrip('/')
-    print(f'시발 {key}')
-    s3 = boto3.client(
-        "s3",
-        aws_access_key_id=AWS_KEY,
-        aws_secret_access_key=AWS_SECRET,
-        region_name="ap-northeast-2"
-    )
-    return s3.generate_presigned_url(
-        ClientMethod='get_object',
-        Params={'Bucket': BUCKET_NAME, 'Key': "audio/03335d3b3b054b0c90b79f5f0fe25c3e.wav"},
-        ExpiresIn=expires_in
-    )
-
 @app.post("/audio")
 async def analyze(req: AnalyzeRequest):
     from funasr.utils.load_utils import download_from_url
@@ -73,7 +50,6 @@ async def analyze(req: AnalyzeRequest):
         raise InvalidAudioFormatError(f'.{ext}')
     
     print(f'request url: {url}')
-    time.sleep(2)
     
     try:
         res = m.inference(
@@ -84,7 +60,7 @@ async def analyze(req: AnalyzeRequest):
             **kwargs,
         )
     except HTTPException as e:
-        raise e
+        raise str(e)
     except Exception as e:
         raise InternalSenseVociceError(e)
 
