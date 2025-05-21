@@ -61,6 +61,7 @@ def url_to_presigned(url: str, expires_in=3600):
 @app.post("/audio")
 async def analyze(req: AnalyzeRequest):
     from funasr.utils.load_utils import download_from_url
+    import time
     
     url = req.audio_url
     
@@ -72,6 +73,7 @@ async def analyze(req: AnalyzeRequest):
         raise InvalidAudioFormatError(f'.{ext}')
     
     print(f'request url: {url}')
+    time.sleep(2)
     
     try:
         res = m.inference(
